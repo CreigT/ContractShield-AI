@@ -9,10 +9,10 @@ import {
   signInWithPopup,
   updateProfile,
 } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { LockKeyhole } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { auth, db, isFirebaseConfigured, missingFirebaseEnvVars } from "@/lib/firebase";
+import { auth, isFirebaseConfigured, missingFirebaseEnvVars } from "@/lib/firebase";
+import { syncUserDocument } from "@/lib/user-document";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,20 +28,6 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function upsertUser(uid: string, userEmail: string | null, displayName: string | null) {
-    const userRef = doc(db, "users", uid);
-    await setDoc(
-      userRef,
-      {
-        email: userEmail,
-        displayName,
-        updatedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  }
-
   async function handleGoogle() {
     if (!isFirebaseConfigured) {
       setError(`Firebase setup required. Missing: ${missingFirebaseEnvVars.join(", ")}`);
@@ -52,8 +38,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, new GoogleAuthProvider());
-      await upsertUser(result.user.uid, result.user.email, result.user.displayName);
-      router.push("/dashboard");
+      void syncUserDocument(result.user).catch(() => {
+        // Authentication should not be blocked by a transient Firestore network issue.
+      });
+      router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed.");
     } finally {
@@ -76,12 +64,16 @@ export default function LoginPage() {
         if (name) {
           await updateProfile(result.user, { displayName: name });
         }
-        await upsertUser(result.user.uid, result.user.email, name || result.user.displayName);
+        void syncUserDocument(result.user, name || result.user.displayName).catch(() => {
+          // Authentication should not be blocked by a transient Firestore network issue.
+        });
       } else {
         const result = await signInWithEmailAndPassword(auth, email, password);
-        await upsertUser(result.user.uid, result.user.email, result.user.displayName);
+        void syncUserDocument(result.user).catch(() => {
+          // Authentication should not be blocked by a transient Firestore network issue.
+        });
       }
-      router.push("/dashboard");
+      router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Email sign-in failed.");
     } finally {

@@ -6,6 +6,7 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { Upload, LayoutDashboard, LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import { auth, isFirebaseConfigured, missingFirebaseEnvVars } from "@/lib/firebase";
+import { syncUserDocument } from "@/lib/user-document";
 import { Button } from "@/components/ui/button";
 import { BrandMark, ShieldLogo } from "@/components/brand/shield-logo";
 
@@ -26,7 +27,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       setLoading(false);
       if (!currentUser) {
         router.replace("/login");
+        return;
       }
+
+      void syncUserDocument(currentUser).catch(() => {
+        // Keep the authenticated app usable even if Firestore is temporarily unreachable.
+      });
     });
 
     return unsubscribe;
