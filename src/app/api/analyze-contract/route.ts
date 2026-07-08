@@ -2,6 +2,8 @@ import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import type { AnalyzeContractResponse, RiskLevel } from "@/lib/types";
 
+export const maxDuration = 90;
+
 const emptyKeyTerms = {
   parties: "",
   effectiveDate: "",
@@ -14,6 +16,19 @@ const emptyKeyTerms = {
   indemnification: "",
   governingLaw: "",
 };
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 function getGemini() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -105,7 +120,7 @@ export async function POST(request: Request) {
       body.contractText.slice(0, 120000),
     ].join("\n");
 
-    const result = await model.generateContent(prompt);
+    const result = await withTimeout(model.generateContent(prompt), 75000, "Gemini analysis timed out. Please try again with a shorter document.");
     const raw = result.response.text();
     const parsed = JSON.parse(raw) as Partial<AnalyzeContractResponse>;
 

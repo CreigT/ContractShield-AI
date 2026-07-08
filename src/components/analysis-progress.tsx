@@ -36,3 +36,18 @@ export function AnalysisProgress() {
     </div>
   );
 }
+
+export function AnalysisProgressStatus({ message }: { message: string }) {
+  return (
+    <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-6 text-center">
+      <ProcessingShield label={message} />
+      <div className="mx-auto mt-5 h-1.5 max-w-xs overflow-hidden rounded-full bg-white/10">
+        <motion.div
+          className="h-full rounded-full bg-primary"
+          animate={{ x: ["-100%", "120%"] }}
+          transition={{ duration: 1.45, repeat: Infinity, ease: "easeInOut" }}
+        />
+      </div>
+    </div>
+  );
+}

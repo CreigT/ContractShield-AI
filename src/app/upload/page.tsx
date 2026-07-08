@@ -5,7 +5,7 @@ import { addDoc, collection, doc, serverTimestamp, updateDoc } from "firebase/fi
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { FileText, FileUp, ShieldCheck, UploadCloud } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { AnalysisProgress } from "@/components/analysis-progress";
+import { AnalysisProgressStatus } from "@/components/analysis-progress";
 import { AppShell } from "@/components/app-shell";
 import { ShieldLogo } from "@/components/brand/shield-logo";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,30 @@ import { contractTypes } from "@/lib/constants";
 import { auth, db, storage } from "@/lib/firebase";
 import type { AnalyzeContractResponse, ContractType } from "@/lib/types";
 
+const networkTimeoutMs = 90000;
+
+async function withTimeout<T>(promise: Promise<T>, message: string, timeoutMs = networkTimeoutMs) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function getErrorMessage(response: Response, fallback: string) {
+  try {
+    const data = (await response.json()) as { error?: string };
+    return data.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function UploadPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -27,17 +51,22 @@ export default function UploadPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [stage, setStage] = useState("Preparing secure upload...");
 
   async function extractText(selectedFile: File) {
     const formData = new FormData();
     formData.append("file", selectedFile);
-    const response = await fetch("/api/extract-contract-text", {
-      method: "POST",
-      body: formData,
-    });
+    const response = await withTimeout(
+      fetch("/api/extract-contract-text", {
+        method: "POST",
+        body: formData,
+      }),
+      "Text extraction is taking too long. Try a smaller file or a text-based PDF.",
+      60000,
+    );
 
     if (!response.ok) {
-      throw new Error("Could not extract text from this document.");
+      throw new Error(await getErrorMessage(response, "Could not extract text from this document."));
     }
 
     const data = (await response.json()) as { text: string };
@@ -45,14 +74,18 @@ export default function UploadPage() {
   }
 
   async function analyzeContract(contractText: string) {
-    const response = await fetch("/api/analyze-contract", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contractText, title, type, notes }),
-    });
+    const response = await withTimeout(
+      fetch("/api/analyze-contract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractText, title, type, notes }),
+      }),
+      "AI analysis is taking too long. Please try again in a moment.",
+      90000,
+    );
 
     if (!response.ok) {
-      throw new Error("AI review failed. Check your Gemini API key and try again.");
+      throw new Error(await getErrorMessage(response, "AI review failed. Check your Gemini API key and try again."));
     }
 
     return (await response.json()) as AnalyzeContractResponse;
@@ -65,42 +98,57 @@ export default function UploadPage() {
 
     setError("");
     setLoading(true);
+    setStage("Uploading contract securely...");
     let contractId: string | null = null;
 
     try {
       const storagePath = `contracts/${user.uid}/${Date.now()}-${file.name}`;
       const fileRef = ref(storage, storagePath);
-      await uploadBytes(fileRef, file);
-      const fileUrl = await getDownloadURL(fileRef);
+      await withTimeout(uploadBytes(fileRef, file), "File upload is taking too long. Check Firebase Storage setup and your connection.");
+      const fileUrl = await withTimeout(getDownloadURL(fileRef), "Could not retrieve the uploaded file URL from Firebase Storage.");
 
-      const contractDoc = await addDoc(collection(db, "contracts"), {
-        userId: user.uid,
-        title,
-        type,
-        notes,
-        fileUrl,
-        fileName: file.name,
-        createdAt: serverTimestamp(),
-        status: "reviewing",
-      });
+      setStage("Saving contract record...");
+      const contractDoc = await withTimeout(
+        addDoc(collection(db, "contracts"), {
+          userId: user.uid,
+          title,
+          type,
+          notes,
+          fileUrl,
+          fileName: file.name,
+          createdAt: serverTimestamp(),
+          status: "reviewing",
+        }),
+        "Saving the contract record is taking too long. Check Firestore setup and security rules.",
+      );
       contractId = contractDoc.id;
 
+      setStage("Extracting contract text...");
       const contractText = await extractText(file);
+      setStage("Analyzing contract risks...");
       const review = await analyzeContract(contractText);
 
-      const reviewDoc = await addDoc(collection(db, "reviews"), {
-        contractId: contractDoc.id,
-        userId: user.uid,
-        ...review,
-        createdAt: serverTimestamp(),
-      });
+      setStage("Saving AI review...");
+      const reviewDoc = await withTimeout(
+        addDoc(collection(db, "reviews"), {
+          contractId: contractDoc.id,
+          userId: user.uid,
+          ...review,
+          createdAt: serverTimestamp(),
+        }),
+        "Saving the review is taking too long. Check Firestore setup and security rules.",
+      );
 
-      await updateDoc(doc(db, "contracts", contractDoc.id), { status: "reviewed" });
-      router.push(`/reviews/${reviewDoc.id}`);
+      setStage("Preparing results...");
+      await withTimeout(
+        updateDoc(doc(db, "contracts", contractDoc.id), { status: "reviewed" }),
+        "Updating the contract status is taking too long. The review may still have been saved.",
+      );
+      router.replace(`/reviews/${reviewDoc.id}`);
     } catch (err) {
       if (contractId) {
         try {
-          await updateDoc(doc(db, "contracts", contractId), { status: "failed" });
+          await withTimeout(updateDoc(doc(db, "contracts", contractId), { status: "failed" }), "Could not mark the contract review as failed.", 15000);
         } catch {
           // Preserve the original upload or analysis error for the user.
         }
@@ -108,6 +156,7 @@ export default function UploadPage() {
       setError(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setLoading(false);
+      setStage("Preparing secure upload...");
     }
   }
 
@@ -125,7 +174,7 @@ export default function UploadPage() {
             <CardDescription>Supported file types: PDF, DOCX, and TXT.</CardDescription>
           </CardHeader>
           <CardContent>
-            {loading ? <AnalysisProgress /> : null}
+            {loading ? <AnalysisProgressStatus message={stage} /> : null}
             <form className="space-y-5" onSubmit={handleSubmit}>
               <div
                 className={`rounded-2xl border border-dashed p-8 text-center transition-all ${
