@@ -2,8 +2,15 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ContractShield AI",
-  description: "Review smarter. Sign with confidence.",
+  title: {
+    default: "ContractShield AI",
+    template: "%s | ContractShield AI",
+  },
+  description: "Upload a business contract and get a plain-English risk review before you sign. A product of Creignificent LLC.",
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({

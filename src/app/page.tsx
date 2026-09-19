@@ -20,9 +20,9 @@ const features = [
 ];
 
 const trustBadges = [
-  { title: "Enterprise Security", icon: LockKeyhole },
-  { title: "Private Document Storage", icon: ShieldCheck },
-  { title: "AI-Powered Analysis", icon: BrainCircuit },
+  { title: "Signed-in reviews only", icon: LockKeyhole },
+  { title: "Private document storage", icon: ShieldCheck },
+  { title: "AI-powered analysis", icon: BrainCircuit },
 ];
 
 export default function LandingPage() {
@@ -60,7 +60,7 @@ export default function LandingPage() {
               Sign with Confidence.
             </h1>
             <p className="max-w-2xl text-lg leading-8 text-muted-foreground sm:text-xl">
-              AI-powered contract intelligence that helps businesses understand agreements before they sign.
+              Upload a service contract and get the risks in English before you sign.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -119,6 +119,17 @@ export default function LandingPage() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p>{legalDisclaimer}</p>
         </div>
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-6 text-sm text-muted-foreground">
+          <p>A product of Creignificent LLC</p>
+          <div className="flex gap-4">
+            <Link href="/terms" className="hover:text-foreground">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+          </div>
+        </footer>
       </section>
     </main>
   );

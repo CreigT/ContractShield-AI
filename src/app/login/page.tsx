@@ -139,6 +139,17 @@ export default function LoginPage() {
               {loading ? "Working..." : mode === "create" ? "Create account" : "Sign in"}
             </Button>
           </form>
+          <p className="text-center text-xs leading-5 text-muted-foreground">
+            By continuing you agree to the{" "}
+            <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
+              Privacy Policy
+            </Link>
+            .
+          </p>
           <Button type="button" variant="ghost" className="w-full" onClick={() => setMode(mode === "create" ? "login" : "create")}>
             {mode === "create" ? "Already have an account? Sign in" : "Create an account"}
           </Button>
