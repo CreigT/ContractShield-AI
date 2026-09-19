@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/require-user";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,11 @@ async function extractDocx(buffer: Buffer) {
 }
 
 export async function POST(request: Request) {
+  const user = await requireUser(request);
+  if (user instanceof NextResponse) {
+    return user;
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");

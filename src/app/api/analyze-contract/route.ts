@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import type { AnalyzeContractResponse, RiskLevel } from "@/lib/types";
+import { requireUser } from "@/lib/require-user";
 
 export const maxDuration = 90;
 
@@ -62,6 +63,11 @@ function normalizeAnalysis(value: Partial<AnalyzeContractResponse>): AnalyzeCont
 }
 
 export async function POST(request: Request) {
+  const user = await requireUser(request);
+  if (user instanceof NextResponse) {
+    return user;
+  }
+
   try {
     const body = (await request.json()) as {
       contractText?: string;
@@ -74,8 +80,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Contract text is required and must be at least 100 characters." }, { status: 400 });
     }
 
+    if (body.contractText.length > 120000) {
+      return NextResponse.json({ error: "Contract text is too long. Upload a shorter document." }, { status: 413 });
+    }
+
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.0-flash";
     const model = getGemini().getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: modelName,
       generationConfig: {
         temperature: 0.2,
         responseMimeType: "application/json",

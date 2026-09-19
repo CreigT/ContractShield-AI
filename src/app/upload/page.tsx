@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getAuthHeaders } from "@/lib/auth-headers";
 import { contractTypes } from "@/lib/constants";
 import { auth, db, storage } from "@/lib/firebase";
 import type { AnalyzeContractResponse, ContractType } from "@/lib/types";
@@ -59,6 +60,7 @@ export default function UploadPage() {
     const response = await withTimeout(
       fetch("/api/extract-contract-text", {
         method: "POST",
+        headers: await getAuthHeaders(),
         body: formData,
       }),
       "Text extraction is taking too long. Try a smaller file or a text-based PDF.",
@@ -77,7 +79,7 @@ export default function UploadPage() {
     const response = await withTimeout(
       fetch("/api/analyze-contract", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await getAuthHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ contractText, title, type, notes }),
       }),
       "AI analysis is taking too long. Please try again in a moment.",
