@@ -12,6 +12,7 @@ declare module "firebase/auth" {
     uid: string;
     email: string | null;
     displayName: string | null;
+    getIdToken(forceRefresh?: boolean): Promise<string>;
   };
 
   export type Auth = {
