@@ -1,7 +1,7 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore, initializeFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 
 const requiredFirebaseEnv = {
   NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,22 +19,32 @@ export const missingFirebaseEnvVars = Object.entries(requiredFirebaseEnv)
 export const isFirebaseConfigured = missingFirebaseEnvVars.length === 0;
 
 const firebaseConfig = {
-  apiKey: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_API_KEY ?? "build-only-api-key",
-  authDomain: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "build-only.firebaseapp.com",
-  projectId: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "build-only",
-  storageBucket: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "build-only.appspot.com",
-  messagingSenderId: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "000000000000",
-  appId: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_APP_ID ?? "1:000000000000:web:0000000000000000000000",
+  apiKey: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_API_KEY ?? "",
+  authDomain: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
+  projectId: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "",
+  storageBucket: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "",
+  messagingSenderId: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "",
+  appId: requiredFirebaseEnv.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
 };
 
-const hasExistingApp = getApps().length > 0;
+const canInitFirebase = isFirebaseConfigured && firebaseConfig.apiKey.length > 20;
 
-export const app = hasExistingApp ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db =
-  hasExistingApp
-    ? getFirestore(app)
-    : initializeFirestore(app, {
-        experimentalAutoDetectLongPolling: true,
-      });
-export const storage = getStorage(app);
+function getOrInitApp() {
+  if (getApps().length > 0) {
+    return getApp();
+  }
+  return initializeApp(firebaseConfig);
+}
+
+export const app = canInitFirebase ? getOrInitApp() : null;
+export const auth = (canInitFirebase ? getAuth(getOrInitApp()) : { currentUser: null }) as Auth;
+export const db = (
+  canInitFirebase
+    ? getApps().length > 0
+      ? getFirestore(getOrInitApp())
+      : initializeFirestore(getOrInitApp(), {
+          experimentalAutoDetectLongPolling: true,
+        })
+    : {}
+) as Firestore;
+export const storage = (canInitFirebase ? getStorage(getOrInitApp()) : {}) as FirebaseStorage;
